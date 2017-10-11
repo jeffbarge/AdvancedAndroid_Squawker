@@ -16,7 +16,7 @@
 
 package android.example.com.squawker;
 
-import android.database.Cursor;
+import android.example.com.squawker.data.Squawk;
 import android.example.com.squawker.provider.SquawkContract;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -25,8 +25,12 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import org.threeten.bp.Instant;
+import org.threeten.bp.format.DateTimeFormatter;
+import org.threeten.bp.temporal.ChronoUnit;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Converts cursor data for squawk messages into visible list items in a RecyclerView
@@ -34,14 +38,8 @@ import java.util.Date;
 public class SquawkAdapter extends RecyclerView.Adapter<SquawkAdapter.SquawkViewHolder> {
 
 
-    private Cursor mData;
-    private static SimpleDateFormat sDateFormat = new SimpleDateFormat("dd MMM");
-
-
-    private static final long MINUTE_MILLIS = 1000 * 60;
-    private static final long HOUR_MILLIS = 60 * MINUTE_MILLIS;
-    private static final long DAY_MILLIS = 24 * HOUR_MILLIS;
-
+    private List<Squawk> mData = new ArrayList<>();
+    private static DateTimeFormatter sFormatter = DateTimeFormatter.ofPattern("dd MMM");
 
     @Override
     public SquawkViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
@@ -54,30 +52,27 @@ public class SquawkAdapter extends RecyclerView.Adapter<SquawkAdapter.SquawkView
 
     @Override
     public void onBindViewHolder(SquawkViewHolder holder, int position) {
-        mData.moveToPosition(position);
+        final Squawk squawk = mData.get(position);
 
-        String message = mData.getString(MainActivity.COL_NUM_MESSAGE);
-        String author = mData.getString(MainActivity.COL_NUM_AUTHOR);
-        String authorKey = mData.getString(MainActivity.COL_NUM_AUTHOR_KEY);
+        String message = squawk.getMessage();
+        String author = squawk.getAuthor();
+        String authorKey = squawk.getAuthorKey();
 
         // Get the date for displaying
-        long dateMillis = mData.getLong(MainActivity.COL_NUM_DATE);
+        final Instant timeStamp = squawk.getTimestamp();
+        final Instant now = Instant.now();
         String date = "";
-        long now = System.currentTimeMillis();
 
         // Change how the date is displayed depending on whether it was written in the last minute,
         // the hour, etc.
-        if (now - dateMillis < (DAY_MILLIS)) {
-            if (now - dateMillis < (HOUR_MILLIS)) {
-                long minutes = Math.round((now - dateMillis) / MINUTE_MILLIS);
-                date = String.valueOf(minutes) + "m";
+        if (ChronoUnit.DAYS.between(timeStamp, now) < 1) {
+            if (ChronoUnit.HOURS.between(timeStamp, now) < 1) {
+                date = String.valueOf(ChronoUnit.MINUTES.between(timeStamp, now)) + "m";
             } else {
-                long minutes = Math.round((now - dateMillis) / HOUR_MILLIS);
-                date = String.valueOf(minutes) + "h";
+                date = String.valueOf(ChronoUnit.HOURS.between(timeStamp, now)) + "h";
             }
         } else {
-            Date dateDate = new Date(dateMillis);
-            date = sDateFormat.format(dateDate);
+            date = sFormatter.format(timeStamp);
         }
 
         // Add a dot to the date string
@@ -113,11 +108,12 @@ public class SquawkAdapter extends RecyclerView.Adapter<SquawkAdapter.SquawkView
     @Override
     public int getItemCount() {
         if (null == mData) return 0;
-        return mData.getCount();
+        return mData.size();
     }
 
-    public void swapCursor(Cursor newCursor) {
-        mData = newCursor;
+    public void setSquawks(List<Squawk> squawks) {
+        mData.clear();
+        mData.addAll(squawks);
         notifyDataSetChanged();
     }
 
@@ -129,10 +125,10 @@ public class SquawkAdapter extends RecyclerView.Adapter<SquawkAdapter.SquawkView
 
         public SquawkViewHolder(View layoutView) {
             super(layoutView);
-            authorTextView = (TextView) layoutView.findViewById(R.id.author_text_view);
-            messageTextView = (TextView) layoutView.findViewById(R.id.message_text_view);
-            dateTextView = (TextView) layoutView.findViewById(R.id.date_text_view);
-            authorImageView = (ImageView) layoutView.findViewById(
+            authorTextView = layoutView.findViewById(R.id.author_text_view);
+            messageTextView = layoutView.findViewById(R.id.message_text_view);
+            dateTextView = layoutView.findViewById(R.id.date_text_view);
+            authorImageView = layoutView.findViewById(
                     R.id.author_image_view);
         }
     }

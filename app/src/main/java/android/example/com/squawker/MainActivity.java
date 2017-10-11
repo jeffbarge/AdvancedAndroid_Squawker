@@ -17,14 +17,11 @@
 package android.example.com.squawker;
 
 import android.content.Intent;
-import android.database.Cursor;
+import android.example.com.squawker.data.Squawk;
+import android.example.com.squawker.data.SquawkDatabase;
 import android.example.com.squawker.following.FollowingPreferenceActivity;
 import android.example.com.squawker.provider.SquawkContract;
-import android.example.com.squawker.provider.SquawkProvider;
 import android.os.Bundle;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.content.CursorLoader;
-import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.preference.PreferenceManager;
 import android.support.v7.widget.DividerItemDecoration;
@@ -35,8 +32,18 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 
-public class MainActivity extends AppCompatActivity implements
-        LoaderManager.LoaderCallbacks<Cursor> {
+import org.reactivestreams.Subscription;
+
+import java.util.List;
+
+import io.reactivex.FlowableSubscriber;
+import io.reactivex.Observer;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Consumer;
+import io.reactivex.schedulers.Schedulers;
+
+public class MainActivity extends AppCompatActivity {
 
     private static String LOG_TAG = MainActivity.class.getSimpleName();
     private static final int LOADER_ID_MESSAGES = 0;
@@ -83,13 +90,26 @@ public class MainActivity extends AppCompatActivity implements
         mAdapter = new SquawkAdapter();
         mRecyclerView.setAdapter(mAdapter);
 
-        // Start the loader
-        getSupportLoaderManager().initLoader(LOADER_ID_MESSAGES, null, this);
 
-        final Bundle extras = getIntent().getExtras();
-        if (extras != null && extras.containsKey("test")) {
-            Log.d(LOG_TAG, "text: " + extras.get("test"));
-        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        //doing this in onResume ensures that we only have the squawks from the teachers we're following
+        //after making changes
+        SquawkDatabase.getInstance(this)
+                .squawkDAO()
+                .getSubscribedSquawks(SquawkContract.createSelectionForCurrentFollowers(PreferenceManager.getDefaultSharedPreferences(this)))
+                .subscribeOn(Schedulers.newThread())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Consumer<List<Squawk>>() {
+                    @Override
+                    public void accept(List<Squawk> squawks) throws Exception {
+                        mAdapter.setSquawks(squawks);
+                    }
+                });
     }
 
     @Override
@@ -109,30 +129,5 @@ public class MainActivity extends AppCompatActivity implements
             return true;
         }
         return super.onOptionsItemSelected(item);
-    }
-
-
-    /**
-     * Loader callbacks
-     */
-
-    @Override
-    public Loader<Cursor> onCreateLoader(int id, Bundle args) {
-        // This method generates a selection off of only the current followers
-        String selection = SquawkContract.createSelectionForCurrentFollowers(
-                PreferenceManager.getDefaultSharedPreferences(this));
-        Log.d(LOG_TAG, "Selection is " + selection);
-        return new CursorLoader(this, SquawkProvider.SquawkMessages.CONTENT_URI,
-                MESSAGES_PROJECTION, selection, null, SquawkContract.COLUMN_DATE + " DESC");
-    }
-
-    @Override
-    public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
-        mAdapter.swapCursor(data);
-    }
-
-    @Override
-    public void onLoaderReset(Loader<Cursor> loader) {
-        mAdapter.swapCursor(null);
     }
 }
